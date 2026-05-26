@@ -130,6 +130,7 @@ class TreningApp(ctk.CTk):
             if self.poprawne_powt > 0 or self.bledne_powt > 0:
                 self.db.zapisz_trening(self.poprawne_powt, self.bledne_powt)
                 self.voice.powiedz("Trening zakończony. Wyniki zapisane.")
+                self.after(100, self.pokaz_wykres)
 
     def aktualizuj_klatki(self):
         if self.is_running:
