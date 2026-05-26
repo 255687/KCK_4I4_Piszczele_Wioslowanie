@@ -1,69 +1,12 @@
 import cv2
 import mediapipe as mp
 import customtkinter as ctk
-import sqlite3
-import pyttsx3
-import threading
-import queue
 import math
-from datetime import datetime
 from PIL import Image
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-
-
-# BAZA DANYCH
-
-def init_db():
-    conn = sqlite3.connect('trening_db.sqlite')
-    c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS statystyki (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    data TEXT,
-                    poprawne INTEGER,
-                    bledne INTEGER
-                )''')
-    conn.commit()
-    conn.close()
-
-
-def zapisz_trening(poprawne, bledne):
-    conn = sqlite3.connect('trening_db.sqlite')
-    c = conn.cursor()
-    c.execute("INSERT INTO statystyki (data, poprawne, bledne) VALUES (?, ?, ?)",
-              (datetime.now().strftime("%Y-%m-%d %H:%M:%S"), poprawne, bledne))
-    conn.commit()
-    conn.close()
-
-
-# SILNIK GŁOSOWY
-
-audio_queue = queue.Queue()
-
-
-def tts_worker():
-    engine = pyttsx3.init()
-    engine.setProperty('rate', 150)
-    while True:
-        text = audio_queue.get()
-        if text is None: break
-        engine.say(text)
-        engine.runAndWait()
-        audio_queue.task_done()
-
-
-tts_thread = threading.Thread(target=tts_worker, daemon=True)
-tts_thread.start()
-
-
-def powiedz(tekst):
-    audio_queue.put(tekst)
-
-
-# MATEMATYKA
-
-mp_pose = mp.solutions.pose
-mp_drawing = mp.solutions.drawing_utils
+from database import Database
+from voice import VoiceAssistant
 
 
 def oblicz_kat(p1, p2, p3):
@@ -73,8 +16,6 @@ def oblicz_kat(p1, p2, p3):
         kat = 360.0 - kat
     return kat
 
-
-# GŁÓWNA APLIKACJA GUI
 
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
@@ -86,13 +27,19 @@ class TreningApp(ctk.CTk):
         self.title("Asystent Treningu - Wiosłowanie Sztangą (PRO - 2 Kamery)")
         self.geometry("1400x700")
 
+        self.db = Database()
+        self.voice = VoiceAssistant()
+
         self.is_running = False
         self.system_aktywny = False
         self.cap_bok = None
         self.cap_tyl = None
 
-        self.pose_bok = mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5)
-        self.pose_tyl = mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5)
+        self.mp_pose = mp.solutions.pose
+        self.mp_drawing = mp.solutions.drawing_utils
+
+        self.pose_bok = self.mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5)
+        self.pose_tyl = self.mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5)
 
         self.poprawne_powt = 0
         self.bledne_powt = 0
@@ -102,7 +49,6 @@ class TreningApp(ctk.CTk):
         self.postawa_zatwierdzona = False
 
         self.setup_ui()
-        init_db()
 
     def setup_ui(self):
         self.video_container = ctk.CTkFrame(self)
@@ -169,7 +115,7 @@ class TreningApp(ctk.CTk):
 
             self.lbl_stats.configure(text=f"Powtórzenia: {self.licznik_powtorzen} | Błędy: {self.bledne_powt}")
 
-            powiedz("Podnieś lewą rękę, aby zacząć. Prawą, aby zakończyć.")
+            self.voice.powiedz("Podnieś lewą rękę, aby zacząć. Prawą, aby zakończyć.")
             self.aktualizuj_klatki()
 
     def stop_trening(self):
@@ -182,22 +128,22 @@ class TreningApp(ctk.CTk):
             self.video_label_tyl.configure(image='')
 
             if self.poprawne_powt > 0 or self.bledne_powt > 0:
-                zapisz_trening(self.poprawne_powt, self.bledne_powt)
-                powiedz("Trening zakończony. Wyniki zapisane.")
+                self.db.zapisz_trening(self.poprawne_powt, self.bledne_powt)
+                self.voice.powiedz("Trening zakończony. Wyniki zapisane.")
 
     def aktualizuj_klatki(self):
         if self.is_running:
             if self.cooldown_komunikatu > 0:
                 self.cooldown_komunikatu -= 1
 
-            # KAMERA BOK
             if self.cap_bok and self.cap_bok.isOpened():
                 ret_bok, frame_bok = self.cap_bok.read()
                 if ret_bok:
                     frame_bok_rgb = cv2.cvtColor(frame_bok, cv2.COLOR_BGR2RGB)
                     results_bok = self.pose_bok.process(frame_bok_rgb)
                     if results_bok.pose_landmarks:
-                        mp_drawing.draw_landmarks(frame_bok_rgb, results_bok.pose_landmarks, mp_pose.POSE_CONNECTIONS)
+                        self.mp_drawing.draw_landmarks(frame_bok_rgb, results_bok.pose_landmarks,
+                                                       self.mp_pose.POSE_CONNECTIONS)
                         self.analizuj_bok(results_bok.pose_landmarks.landmark)
 
                     img_bok = Image.fromarray(cv2.resize(frame_bok_rgb, (480, 360)))
@@ -205,14 +151,14 @@ class TreningApp(ctk.CTk):
                     self.video_label_bok.configure(image=ctk_img_bok)
                     self.video_label_bok.image = ctk_img_bok
 
-            # KAMERA TYŁ
             if self.cap_tyl and self.cap_tyl.isOpened():
                 ret_tyl, frame_tyl = self.cap_tyl.read()
                 if ret_tyl:
                     frame_tyl_rgb = cv2.cvtColor(frame_tyl, cv2.COLOR_BGR2RGB)
                     results_tyl = self.pose_tyl.process(frame_tyl_rgb)
                     if results_tyl.pose_landmarks:
-                        mp_drawing.draw_landmarks(frame_tyl_rgb, results_tyl.pose_landmarks, mp_pose.POSE_CONNECTIONS)
+                        self.mp_drawing.draw_landmarks(frame_tyl_rgb, results_tyl.pose_landmarks,
+                                                       self.mp_pose.POSE_CONNECTIONS)
                         if self.system_aktywny:
                             self.analizuj_tyl(results_tyl.pose_landmarks.landmark)
 
@@ -224,44 +170,35 @@ class TreningApp(ctk.CTk):
             self.after(10, self.aktualizuj_klatki)
 
     def analizuj_bok(self, landmarks):
-        # Pobieranie współrzędnych dłoni i oczu
-        lewa_dlon_y = landmarks[mp_pose.PoseLandmark.LEFT_WRIST.value].y
-        lewe_oko_y = landmarks[mp_pose.PoseLandmark.LEFT_EYE.value].y
+        lewa_dlon_y = landmarks[self.mp_pose.PoseLandmark.LEFT_WRIST.value].y
+        lewe_oko_y = landmarks[self.mp_pose.PoseLandmark.LEFT_EYE.value].y
 
-        prawa_dlon_y = landmarks[mp_pose.PoseLandmark.RIGHT_WRIST.value].y
-        prawe_oko_y = landmarks[mp_pose.PoseLandmark.RIGHT_EYE.value].y
+        prawa_dlon_y = landmarks[self.mp_pose.PoseLandmark.RIGHT_WRIST.value].y
+        prawe_oko_y = landmarks[self.mp_pose.PoseLandmark.RIGHT_EYE.value].y
 
-        # GEST STARTOWY (Lewa ręka)
         if not self.system_aktywny:
             if lewa_dlon_y < lewe_oko_y:
                 self.system_aktywny = True
                 self.lbl_feedback_bok.configure(text="STATUS: AKTYWNY", text_color="cyan")
-                powiedz("System aktywny. Przyjmij pozycję i zacznij ćwiczyć.")
+                self.voice.powiedz("System aktywny. Przyjmij pozycję i zacznij ćwiczyć.")
             else:
                 self.lbl_feedback_bok.configure(text="Podnieś lewą rękę, aby zacząć", text_color="yellow")
                 return
 
-        # GEST KOŃCOWY (Prawa ręka)
         if self.system_aktywny:
             if prawa_dlon_y < prawe_oko_y:
                 self.after(0, self.stop_trening)
                 return
 
-                # POBRANIE PUNKTÓW DO ANALIZY RUCHU
-        ramie = [landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].x,
-                 landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].y]
-        biodro = [landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].x, landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].y]
-        kolano = [landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value].x, landmarks[mp_pose.PoseLandmark.LEFT_KNEE.value].y]
-        lokiec = [landmarks[mp_pose.PoseLandmark.LEFT_ELBOW.value].x,
-                  landmarks[mp_pose.PoseLandmark.LEFT_ELBOW.value].y]
-        nadgarstek = [landmarks[mp_pose.PoseLandmark.LEFT_WRIST.value].x,
-                      landmarks[mp_pose.PoseLandmark.LEFT_WRIST.value].y]
+        ramie = [landmarks[self.mp_pose.PoseLandmark.LEFT_SHOULDER.value].x,landmarks[self.mp_pose.PoseLandmark.LEFT_SHOULDER.value].y]
+        biodro = [landmarks[self.mp_pose.PoseLandmark.LEFT_HIP.value].x,landmarks[self.mp_pose.PoseLandmark.LEFT_HIP.value].y]
+        kolano = [landmarks[self.mp_pose.PoseLandmark.LEFT_KNEE.value].x,landmarks[self.mp_pose.PoseLandmark.LEFT_KNEE.value].y]
+        lokiec = [landmarks[self.mp_pose.PoseLandmark.LEFT_ELBOW.value].x,landmarks[self.mp_pose.PoseLandmark.LEFT_ELBOW.value].y]
+        nadgarstek = [landmarks[self.mp_pose.PoseLandmark.LEFT_WRIST.value].x,landmarks[self.mp_pose.PoseLandmark.LEFT_WRIST.value].y]
 
-        # WYLICZENIE KĄTÓW
         kat_plecow = oblicz_kat(ramie, biodro, kolano)
         kat_lokcia = oblicz_kat(ramie, lokiec, nadgarstek)
 
-        # WERYFIKACJA POSTAWY
         if 70 < kat_plecow < 140:
             if not self.postawa_zatwierdzona:
                 self.postawa_zatwierdzona = True
@@ -270,36 +207,32 @@ class TreningApp(ctk.CTk):
             self.postawa_zatwierdzona = False
             self.lbl_feedback_bok.configure(text="Postawa: BŁĄD", text_color="red")
             if self.cooldown_komunikatu == 0:
-                powiedz("Popraw plecy!")
+                self.voice.powiedz("Popraw plecy!")
                 self.bledne_powt += 1
                 self.cooldown_komunikatu = 100
 
-        # LOGIKA LICZENIA POWTÓRZEŃ
         if self.postawa_zatwierdzona:
 
-            # FAZA CIĄGNIĘCIA
             if kat_lokcia < 95:
                 if self.faza_ruchu == "dol":
                     self.faza_ruchu = "gora"
 
-            # FAZA POWROTU
             elif kat_lokcia > 140:
                 if self.faza_ruchu == "gora":
-                    # Powtórzenie zaliczane tylko w momencie pełnego powrotu do pozycji wyjściowej
                     self.licznik_powtorzen += 1
                     self.poprawne_powt += 1
                     self.faza_ruchu = "dol"
-                    powiedz(str(self.licznik_powtorzen))
+                    self.voice.powiedz(str(self.licznik_powtorzen))
 
         self.lbl_stats.configure(text=f"Powtórzenia: {self.licznik_powtorzen} | Błędy: {self.bledne_powt}")
 
     def analizuj_tyl(self, landmarks):
-        lewy_bark_y = landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].y
-        prawy_bark_y = landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER.value].y
+        lewy_bark_y = landmarks[self.mp_pose.PoseLandmark.LEFT_SHOULDER.value].y
+        prawy_bark_y = landmarks[self.mp_pose.PoseLandmark.RIGHT_SHOULDER.value].y
         roznica_barkow = abs(lewy_bark_y - prawy_bark_y)
 
-        lewy_lokiec_y = landmarks[mp_pose.PoseLandmark.LEFT_ELBOW.value].y
-        prawy_lokiec_y = landmarks[mp_pose.PoseLandmark.RIGHT_ELBOW.value].y
+        lewy_lokiec_y = landmarks[self.mp_pose.PoseLandmark.LEFT_ELBOW.value].y
+        prawy_lokiec_y = landmarks[self.mp_pose.PoseLandmark.RIGHT_ELBOW.value].y
         roznica_lokci = abs(lewy_lokiec_y - prawy_lokiec_y)
 
         if self.faza_ruchu == "gora":
@@ -310,11 +243,11 @@ class TreningApp(ctk.CTk):
                 self.lbl_feedback_tyl.configure(text="Symetria: ZŁA", text_color="red")
                 if self.cooldown_komunikatu == 0:
                     if blad_barkow and blad_lokci:
-                        powiedz("Nierówne barki i łokcie.")
+                        self.voice.powiedz("Nierówne barki i łokcie.")
                     elif blad_barkow:
-                        powiedz("Wyrównaj barki.")
+                        self.voice.powiedz("Wyrównaj barki.")
                     elif blad_lokci:
-                        powiedz("Nierówne łokcie, ciągnij symetrycznie.")
+                        self.voice.powiedz("Nierówne łokcie, ciągnij symetrycznie.")
 
                     self.bledne_powt += 1
                     self.cooldown_komunikatu = 100
@@ -324,14 +257,10 @@ class TreningApp(ctk.CTk):
             self.lbl_feedback_tyl.configure(text="Symetria: (w spoczynku)", text_color="white")
 
     def pokaz_wykres(self):
-        conn = sqlite3.connect('trening_db.sqlite')
-        c = conn.cursor()
-        c.execute("SELECT data, poprawne, bledne FROM statystyki ORDER BY id DESC LIMIT 5")
-        dane = c.fetchall()
-        conn.close()
+        dane = self.db.pobierz_statystyki()
 
         if not dane:
-            powiedz("Brak danych.")
+            self.voice.powiedz("Brak danych.")
             return
 
         dane.reverse()
