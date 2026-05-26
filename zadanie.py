@@ -11,7 +11,8 @@ from PIL import Image
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
-#BAZA DANYCH
+
+# BAZA DANYCH
 
 def init_db():
     conn = sqlite3.connect('trening_db.sqlite')
@@ -25,6 +26,7 @@ def init_db():
     conn.commit()
     conn.close()
 
+
 def zapisz_trening(poprawne, bledne):
     conn = sqlite3.connect('trening_db.sqlite')
     c = conn.cursor()
@@ -33,9 +35,11 @@ def zapisz_trening(poprawne, bledne):
     conn.commit()
     conn.close()
 
-#SILNIK GŁOSOWY
+
+# SILNIK GŁOSOWY
 
 audio_queue = queue.Queue()
+
 
 def tts_worker():
     engine = pyttsx3.init()
@@ -47,16 +51,20 @@ def tts_worker():
         engine.runAndWait()
         audio_queue.task_done()
 
+
 tts_thread = threading.Thread(target=tts_worker, daemon=True)
 tts_thread.start()
+
 
 def powiedz(tekst):
     audio_queue.put(tekst)
 
-#MATEMATYKA
+
+# MATEMATYKA
 
 mp_pose = mp.solutions.pose
 mp_drawing = mp.solutions.drawing_utils
+
 
 def oblicz_kat(p1, p2, p3):
     kat = math.degrees(math.atan2(p3[1] - p2[1], p3[0] - p2[0]) - math.atan2(p1[1] - p2[1], p1[0] - p2[0]))
@@ -65,20 +73,26 @@ def oblicz_kat(p1, p2, p3):
         kat = 360.0 - kat
     return kat
 
-#GŁÓWNA APLIKACJA GUI
+
+# GŁÓWNA APLIKACJA GUI
 
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
 
+
 class TreningApp(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("Asystent Treningu - Wiosłowanie Sztangą (Wersja Bazowa)")
-        self.geometry("1000x700")
+        self.title("Asystent Treningu - Wiosłowanie Sztangą (PRO - 2 Kamery)")
+        self.geometry("1400x700")
 
         self.is_running = False
+        self.system_aktywny = False
         self.cap_bok = None
+        self.cap_tyl = None
+
         self.pose_bok = mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5)
+        self.pose_tyl = mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5)
 
         self.poprawne_powt = 0
         self.bledne_powt = 0
@@ -101,6 +115,13 @@ class TreningApp(ctk.CTk):
         self.lbl_tytul_bok.pack(pady=5)
         self.video_label_bok = ctk.CTkLabel(self.frame_bok, text="")
         self.video_label_bok.pack(expand=True)
+
+        self.frame_tyl = ctk.CTkFrame(self.video_container)
+        self.frame_tyl.pack(side="left", padx=10, fill="both", expand=True)
+        self.lbl_tytul_tyl = ctk.CTkLabel(self.frame_tyl, text="Kamera: Tył (iPhone)", font=ctk.CTkFont(weight="bold"))
+        self.lbl_tytul_tyl.pack(pady=5)
+        self.video_label_tyl = ctk.CTkLabel(self.frame_tyl, text="")
+        self.video_label_tyl.pack(expand=True)
 
         self.control_frame = ctk.CTkFrame(self, width=300)
         self.control_frame.pack(side="right", padx=20, pady=20, fill="y")
@@ -126,11 +147,19 @@ class TreningApp(ctk.CTk):
                                              font=ctk.CTkFont(size=14))
         self.lbl_feedback_bok.pack(pady=5)
 
+        self.lbl_feedback_tyl = ctk.CTkLabel(self.control_frame, text="Symetria: Gotowa", text_color="white",
+                                             font=ctk.CTkFont(size=14))
+        self.lbl_feedback_tyl.pack(pady=5)
+
     def start_trening(self):
         if not self.is_running:
             self.cap_bok = cv2.VideoCapture(0)
 
+            ADRES_IP_TELEFONU = 1
+            self.cap_tyl = cv2.VideoCapture(ADRES_IP_TELEFONU)
+
             self.is_running = True
+            self.system_aktywny = False
             self.poprawne_powt = 0
             self.bledne_powt = 0
             self.licznik_powtorzen = 0
@@ -139,14 +168,18 @@ class TreningApp(ctk.CTk):
             self.cooldown_komunikatu = 0
 
             self.lbl_stats.configure(text=f"Powtórzenia: {self.licznik_powtorzen} | Błędy: {self.bledne_powt}")
-            powiedz("Rozpoczynamy trening. Ustaw się w kadrze.")
+
+            powiedz("Podnieś lewą rękę, aby zacząć. Prawą, aby zakończyć.")
             self.aktualizuj_klatki()
 
     def stop_trening(self):
         if self.is_running:
             self.is_running = False
             if self.cap_bok: self.cap_bok.release()
+            if self.cap_tyl: self.cap_tyl.release()
+
             self.video_label_bok.configure(image='')
+            self.video_label_tyl.configure(image='')
 
             if self.poprawne_powt > 0 or self.bledne_powt > 0:
                 zapisz_trening(self.poprawne_powt, self.bledne_powt)
@@ -157,7 +190,7 @@ class TreningApp(ctk.CTk):
             if self.cooldown_komunikatu > 0:
                 self.cooldown_komunikatu -= 1
 
-            #KAMERA BOK
+            # KAMERA BOK
             if self.cap_bok and self.cap_bok.isOpened():
                 ret_bok, frame_bok = self.cap_bok.read()
                 if ret_bok:
@@ -167,15 +200,54 @@ class TreningApp(ctk.CTk):
                         mp_drawing.draw_landmarks(frame_bok_rgb, results_bok.pose_landmarks, mp_pose.POSE_CONNECTIONS)
                         self.analizuj_bok(results_bok.pose_landmarks.landmark)
 
-                    img_bok = Image.fromarray(cv2.resize(frame_bok_rgb, (640, 480)))
-                    ctk_img_bok = ctk.CTkImage(light_image=img_bok, dark_image=img_bok, size=(640, 480))
+                    img_bok = Image.fromarray(cv2.resize(frame_bok_rgb, (480, 360)))
+                    ctk_img_bok = ctk.CTkImage(light_image=img_bok, dark_image=img_bok, size=(480, 360))
                     self.video_label_bok.configure(image=ctk_img_bok)
                     self.video_label_bok.image = ctk_img_bok
+
+            # KAMERA TYŁ
+            if self.cap_tyl and self.cap_tyl.isOpened():
+                ret_tyl, frame_tyl = self.cap_tyl.read()
+                if ret_tyl:
+                    frame_tyl_rgb = cv2.cvtColor(frame_tyl, cv2.COLOR_BGR2RGB)
+                    results_tyl = self.pose_tyl.process(frame_tyl_rgb)
+                    if results_tyl.pose_landmarks:
+                        mp_drawing.draw_landmarks(frame_tyl_rgb, results_tyl.pose_landmarks, mp_pose.POSE_CONNECTIONS)
+                        if self.system_aktywny:
+                            self.analizuj_tyl(results_tyl.pose_landmarks.landmark)
+
+                    img_tyl = Image.fromarray(cv2.resize(frame_tyl_rgb, (480, 360)))
+                    ctk_img_tyl = ctk.CTkImage(light_image=img_tyl, dark_image=img_tyl, size=(480, 360))
+                    self.video_label_tyl.configure(image=ctk_img_tyl)
+                    self.video_label_tyl.image = ctk_img_tyl
 
             self.after(10, self.aktualizuj_klatki)
 
     def analizuj_bok(self, landmarks):
-        # POBRANIE PUNKTÓW DO ANALIZY RUCHU
+        # Pobieranie współrzędnych dłoni i oczu
+        lewa_dlon_y = landmarks[mp_pose.PoseLandmark.LEFT_WRIST.value].y
+        lewe_oko_y = landmarks[mp_pose.PoseLandmark.LEFT_EYE.value].y
+
+        prawa_dlon_y = landmarks[mp_pose.PoseLandmark.RIGHT_WRIST.value].y
+        prawe_oko_y = landmarks[mp_pose.PoseLandmark.RIGHT_EYE.value].y
+
+        # GEST STARTOWY (Lewa ręka)
+        if not self.system_aktywny:
+            if lewa_dlon_y < lewe_oko_y:
+                self.system_aktywny = True
+                self.lbl_feedback_bok.configure(text="STATUS: AKTYWNY", text_color="cyan")
+                powiedz("System aktywny. Przyjmij pozycję i zacznij ćwiczyć.")
+            else:
+                self.lbl_feedback_bok.configure(text="Podnieś lewą rękę, aby zacząć", text_color="yellow")
+                return
+
+        # GEST KOŃCOWY (Prawa ręka)
+        if self.system_aktywny:
+            if prawa_dlon_y < prawe_oko_y:
+                self.after(0, self.stop_trening)
+                return
+
+                # POBRANIE PUNKTÓW DO ANALIZY RUCHU
         ramie = [landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].x,
                  landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].y]
         biodro = [landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].x, landmarks[mp_pose.PoseLandmark.LEFT_HIP.value].y]
@@ -189,7 +261,7 @@ class TreningApp(ctk.CTk):
         kat_plecow = oblicz_kat(ramie, biodro, kolano)
         kat_lokcia = oblicz_kat(ramie, lokiec, nadgarstek)
 
-        #WERYFIKACJA POSTAWY
+        # WERYFIKACJA POSTAWY
         if 70 < kat_plecow < 140:
             if not self.postawa_zatwierdzona:
                 self.postawa_zatwierdzona = True
@@ -202,8 +274,9 @@ class TreningApp(ctk.CTk):
                 self.bledne_powt += 1
                 self.cooldown_komunikatu = 100
 
-        #LOGIKA LICZENIA POWTÓRZEŃ
+        # LOGIKA LICZENIA POWTÓRZEŃ
         if self.postawa_zatwierdzona:
+
             # FAZA CIĄGNIĘCIA
             if kat_lokcia < 95:
                 if self.faza_ruchu == "dol":
@@ -212,12 +285,43 @@ class TreningApp(ctk.CTk):
             # FAZA POWROTU
             elif kat_lokcia > 140:
                 if self.faza_ruchu == "gora":
+                    # Powtórzenie zaliczane tylko w momencie pełnego powrotu do pozycji wyjściowej
                     self.licznik_powtorzen += 1
                     self.poprawne_powt += 1
                     self.faza_ruchu = "dol"
                     powiedz(str(self.licznik_powtorzen))
 
         self.lbl_stats.configure(text=f"Powtórzenia: {self.licznik_powtorzen} | Błędy: {self.bledne_powt}")
+
+    def analizuj_tyl(self, landmarks):
+        lewy_bark_y = landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].y
+        prawy_bark_y = landmarks[mp_pose.PoseLandmark.RIGHT_SHOULDER.value].y
+        roznica_barkow = abs(lewy_bark_y - prawy_bark_y)
+
+        lewy_lokiec_y = landmarks[mp_pose.PoseLandmark.LEFT_ELBOW.value].y
+        prawy_lokiec_y = landmarks[mp_pose.PoseLandmark.RIGHT_ELBOW.value].y
+        roznica_lokci = abs(lewy_lokiec_y - prawy_lokiec_y)
+
+        if self.faza_ruchu == "gora":
+            blad_barkow = roznica_barkow > 0.05
+            blad_lokci = roznica_lokci > 0.08
+
+            if blad_barkow or blad_lokci:
+                self.lbl_feedback_tyl.configure(text="Symetria: ZŁA", text_color="red")
+                if self.cooldown_komunikatu == 0:
+                    if blad_barkow and blad_lokci:
+                        powiedz("Nierówne barki i łokcie.")
+                    elif blad_barkow:
+                        powiedz("Wyrównaj barki.")
+                    elif blad_lokci:
+                        powiedz("Nierówne łokcie, ciągnij symetrycznie.")
+
+                    self.bledne_powt += 1
+                    self.cooldown_komunikatu = 100
+            else:
+                self.lbl_feedback_tyl.configure(text="Symetria: OK", text_color="green")
+        else:
+            self.lbl_feedback_tyl.configure(text="Symetria: (w spoczynku)", text_color="white")
 
     def pokaz_wykres(self):
         conn = sqlite3.connect('trening_db.sqlite')
@@ -250,6 +354,7 @@ class TreningApp(ctk.CTk):
         canvas = FigureCanvasTkAgg(fig, master=okno)
         canvas.draw()
         canvas.get_tk_widget().pack(fill="both", expand=True)
+
 
 if __name__ == "__main__":
     app = TreningApp()
