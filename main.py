@@ -49,6 +49,8 @@ class TreningApp(ctk.CTk):
         self.faza_ruchu = "dol"
         self.postawa_zatwierdzona = False
         self.odliczanie_trwa = False
+        self.current_trening_id = None
+        self.numer_serii = 1
 
         self.setup_ui()
 
@@ -88,7 +90,7 @@ class TreningApp(ctk.CTk):
         self.btn_wykres = ctk.CTkButton(self.control_frame, text="Pokaż Historię", command=self.pokaz_wykres)
         self.btn_wykres.pack(pady=10)
 
-        self.lbl_stats = ctk.CTkLabel(self.control_frame, text="Powtórzenia: 0 | Błędy: 0", font=ctk.CTkFont(size=16))
+        self.lbl_stats = ctk.CTkLabel(self.control_frame, text="Seria: 1 | Powtórzenia: 0 | Błędy: 0", font=ctk.CTkFont(size=16))
         self.lbl_stats.pack(pady=30)
 
         self.lbl_feedback_bok = ctk.CTkLabel(self.control_frame, text="Profil: Gotowy", text_color="white",
@@ -108,6 +110,8 @@ class TreningApp(ctk.CTk):
 
             self.is_running = True
             self.system_aktywny = False
+            self.current_trening_id = self.db.nowy_trening()
+            self.numer_serii = 1
             self.poprawne_powt = 0
             self.bledne_powt = 0
             self.licznik_powtorzen = 0
@@ -116,24 +120,25 @@ class TreningApp(ctk.CTk):
             self.cooldown_komunikatu = 0
             self.odliczanie_trwa = False
 
-            self.lbl_stats.configure(text=f"Powtórzenia: {self.licznik_powtorzen} | Błędy: {self.bledne_powt}")
+            self.lbl_stats.configure(text=f"Seria: {self.numer_serii} | Powtórzenia: {self.licznik_powtorzen} | Błędy: {self.bledne_powt}")
 
-            self.voice.powiedz("Podnieś lewą rękę, aby zacząć. Prawą, aby zakończyć.")
+            self.voice.powiedz("Trening rozpoczęty. Lewa ręka startuje serię. Prawa kończy serię. Obie ręce kończą trening.")
             self.aktualizuj_klatki()
 
     def stop_trening(self):
         if self.is_running:
+            if self.system_aktywny and (self.poprawne_powt > 0 or self.bledne_powt > 0):
+                self.zakoncz_serie()
+
             self.is_running = False
             if self.cap_bok: self.cap_bok.release()
             if self.cap_tyl: self.cap_tyl.release()
 
-            self.video_label_bok.configure(image='')
-            self.video_label_tyl.configure(image='')
+            self.video_label_bok.configure(image=None)
+            self.video_label_tyl.configure(image=None)
 
-            if self.poprawne_powt > 0 or self.bledne_powt > 0:
-                self.db.zapisz_trening(self.poprawne_powt, self.bledne_powt)
-                self.voice.powiedz("Trening zakończony. Wyniki zapisane.")
-                self.after(100, self.pokaz_wykres)
+            self.voice.powiedz("Trening zakończony.")
+            self.after(100, self.pokaz_wykres)
 
     def aktualizuj_klatki(self):
         if self.is_running:
@@ -175,7 +180,7 @@ class TreningApp(ctk.CTk):
 
     def rozpocznij_odliczanie(self, sekundy):
         self.odliczanie_trwa = True
-        self.voice.powiedz(f"Trening rozpocznie się za {sekundy} sekund. Ustaw się.")
+        self.voice.powiedz(f"Seria {self.numer_serii} rozpocznie się za {sekundy} sekund. Ustaw się.")
         self.odliczanie_krok(sekundy)
 
     def odliczanie_krok(self, sekundy):
@@ -191,6 +196,18 @@ class TreningApp(ctk.CTk):
             self.lbl_feedback_bok.configure(text="STATUS: AKTYWNY", text_color="cyan")
             self.voice.powiedz("Start!")
 
+    def zakoncz_serie(self):
+        self.db.zapisz_serie(self.current_trening_id, self.numer_serii, self.poprawne_powt, self.bledne_powt)
+        self.voice.powiedz(f"Seria {self.numer_serii} zakończona i zapisana.")
+        self.numer_serii += 1
+        self.poprawne_powt = 0
+        self.bledne_powt = 0
+        self.licznik_powtorzen = 0
+        self.faza_ruchu = "dol"
+        self.postawa_zatwierdzona = False
+        self.system_aktywny = False
+        self.lbl_stats.configure(text=f"Seria: {self.numer_serii} | Powtórzenia: 0 | Błędy: 0")
+
     def analizuj_bok(self, landmarks):
         lewa_dlon_y = landmarks[self.mp_pose.PoseLandmark.LEFT_WRIST.value].y
         lewe_oko_y = landmarks[self.mp_pose.PoseLandmark.LEFT_EYE.value].y
@@ -198,18 +215,25 @@ class TreningApp(ctk.CTk):
         prawa_dlon_y = landmarks[self.mp_pose.PoseLandmark.RIGHT_WRIST.value].y
         prawe_oko_y = landmarks[self.mp_pose.PoseLandmark.RIGHT_EYE.value].y
 
-        if not self.system_aktywny:
-            if not self.odliczanie_trwa:
-                if lewa_dlon_y < lewe_oko_y:
-                    self.rozpocznij_odliczanie(5)
-                else:
-                    self.lbl_feedback_bok.configure(text="Podnieś lewą rękę, aby zacząć", text_color="yellow")
+        lewa_w_gorze = lewa_dlon_y < lewe_oko_y
+        prawa_w_gorze = prawa_dlon_y < prawe_oko_y
+
+        if lewa_w_gorze and prawa_w_gorze:
+            self.after(0, self.stop_trening)
             return
 
         if self.system_aktywny:
-            if prawa_dlon_y < prawe_oko_y:
-                self.after(0, self.stop_trening)
+            if prawa_w_gorze and not lewa_w_gorze:
+                self.zakoncz_serie()
                 return
+
+        if not self.system_aktywny:
+            if not self.odliczanie_trwa:
+                if lewa_w_gorze and not prawa_w_gorze:
+                    self.rozpocznij_odliczanie(5)
+                else:
+                    self.lbl_feedback_bok.configure(text=f"Podnieś lewą rękę (Start Serii {self.numer_serii})", text_color="yellow")
+            return
 
         ramie = [landmarks[self.mp_pose.PoseLandmark.LEFT_SHOULDER.value].x,
                  landmarks[self.mp_pose.PoseLandmark.LEFT_SHOULDER.value].y]
@@ -248,7 +272,7 @@ class TreningApp(ctk.CTk):
                     self.faza_ruchu = "dol"
                     self.voice.powiedz(str(self.licznik_powtorzen))
 
-        self.lbl_stats.configure(text=f"Powtórzenia: {self.licznik_powtorzen} | Błędy: {self.bledne_powt}")
+        self.lbl_stats.configure(text=f"Seria: {self.numer_serii} | Powtórzenia: {self.licznik_powtorzen} | Błędy: {self.bledne_powt}")
 
     def analizuj_tyl(self, landmarks):
         lewy_bark_y = landmarks[self.mp_pose.PoseLandmark.LEFT_SHOULDER.value].y
@@ -281,27 +305,29 @@ class TreningApp(ctk.CTk):
             self.lbl_feedback_tyl.configure(text="Symetria: (w spoczynku)", text_color="white")
 
     def pokaz_wykres(self):
-        dane = self.db.pobierz_statystyki()
-
-        if not dane:
-            self.voice.powiedz("Brak danych.")
+        if not self.current_trening_id:
             return
 
-        dane.reverse()
-        daty = [row[0].split(" ")[0] for row in dane]
+        dane = self.db.pobierz_serie_treningu(self.current_trening_id)
+
+        if not dane:
+            self.voice.powiedz("Brak danych dla tego treningu.")
+            return
+
+        serie_labels = [f"Seria {row[0]}" for row in dane]
         poprawne = [row[1] for row in dane]
         bledy = [row[2] for row in dane]
 
         okno = ctk.CTkToplevel(self)
-        okno.title("Statystyki")
+        okno.title("Statystyki Bieżącego Treningu")
         okno.geometry("600x400")
 
         fig, ax = plt.subplots(figsize=(5, 4))
-        x = range(len(daty))
+        x = range(len(serie_labels))
         ax.bar([i - 0.2 for i in x], poprawne, width=0.4, label='Poprawne', color='green')
         ax.bar([i + 0.2 for i in x], bledy, width=0.4, label='Błędy', color='red')
         ax.set_xticks(x)
-        ax.set_xticklabels(daty)
+        ax.set_xticklabels(serie_labels)
         ax.legend()
 
         canvas = FigureCanvasTkAgg(fig, master=okno)
