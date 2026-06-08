@@ -60,8 +60,7 @@ class TreningApp(ctk.CTk):
 
         self.frame_bok = ctk.CTkFrame(self.video_container)
         self.frame_bok.pack(side="left", padx=10, fill="both", expand=True)
-        self.lbl_tytul_bok = ctk.CTkLabel(self.frame_bok, text="Kamera: Profil (Laptop)",
-                                          font=ctk.CTkFont(weight="bold"))
+        self.lbl_tytul_bok = ctk.CTkLabel(self.frame_bok, text="Kamera: Profil (Laptop)",font=ctk.CTkFont(weight="bold"))
         self.lbl_tytul_bok.pack(pady=5)
         self.video_label_bok = ctk.CTkLabel(self.frame_bok, text="")
         self.video_label_bok.pack(expand=True)
@@ -76,15 +75,13 @@ class TreningApp(ctk.CTk):
         self.control_frame = ctk.CTkFrame(self, width=300)
         self.control_frame.pack(side="right", padx=20, pady=20, fill="y")
 
-        self.lbl_title = ctk.CTkLabel(self.control_frame, text="Panel Kontrolny",
-                                      font=ctk.CTkFont(size=20, weight="bold"))
+        self.lbl_title = ctk.CTkLabel(self.control_frame, text="Panel Kontrolny",font=ctk.CTkFont(size=20, weight="bold"))
         self.lbl_title.pack(pady=20)
 
         self.btn_start = ctk.CTkButton(self.control_frame, text="Rozpocznij Trening", command=self.start_trening)
         self.btn_start.pack(pady=10)
 
-        self.btn_stop = ctk.CTkButton(self.control_frame, text="Zakończ i Zapisz", command=self.stop_trening,
-                                      fg_color="red")
+        self.btn_stop = ctk.CTkButton(self.control_frame, text="Zakończ i Zapisz", command=self.stop_trening,fg_color="red")
         self.btn_stop.pack(pady=10)
 
         self.btn_wykres = ctk.CTkButton(self.control_frame, text="Pokaż Historię", command=self.pokaz_wykres)
@@ -93,12 +90,10 @@ class TreningApp(ctk.CTk):
         self.lbl_stats = ctk.CTkLabel(self.control_frame, text="Seria: 1 | Powtórzenia: 0 | Błędy: 0", font=ctk.CTkFont(size=16))
         self.lbl_stats.pack(pady=30)
 
-        self.lbl_feedback_bok = ctk.CTkLabel(self.control_frame, text="Profil: Gotowy", text_color="white",
-                                             font=ctk.CTkFont(size=14))
+        self.lbl_feedback_bok = ctk.CTkLabel(self.control_frame, text="Profil: Gotowy", text_color="white",font=ctk.CTkFont(size=14))
         self.lbl_feedback_bok.pack(pady=5)
 
-        self.lbl_feedback_tyl = ctk.CTkLabel(self.control_frame, text="Symetria: Gotowa", text_color="white",
-                                             font=ctk.CTkFont(size=14))
+        self.lbl_feedback_tyl = ctk.CTkLabel(self.control_frame, text="Symetria: Gotowa", text_color="white",font=ctk.CTkFont(size=14))
         self.lbl_feedback_tyl.pack(pady=5)
 
     def start_trening(self):
