@@ -30,8 +30,8 @@ class MenuApp(ctk.CTk):
 
     def otworz_trening(self):
         self.withdraw()
-        from main import TreningApp
-        trening = TreningApp()
+        from trening import TreningApp
+        trening = TreningApp(self)
 
         def on_close():
             trening.stop_trening()
