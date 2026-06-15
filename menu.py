@@ -1,5 +1,7 @@
 import customtkinter as ctk
 import sqlite3
+import cv2
+from PIL import Image
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from database import Database
@@ -11,7 +13,7 @@ class MenuApp(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("Asystent Treningu - Menu Główne")
-        self.geometry("400x500")
+        self.geometry("450x550")
         self.db = Database()
         self.setup_ui()
 
@@ -20,13 +22,16 @@ class MenuApp(ctk.CTk):
         self.lbl_main_title.pack(pady=40)
 
         self.btn_przejdz_do_treningu = ctk.CTkButton(self, text="Przejdź do Treningu", width=250, height=45,font=ctk.CTkFont(size=15), command=self.otworz_trening)
-        self.btn_przejdz_do_treningu.pack(pady=15)
+        self.btn_przejdz_do_treningu.pack(pady=10)
+
+        self.btn_instrukcja = ctk.CTkButton(self, text="Jak ćwiczyć poprawnie?", width=250, height=45,font=ctk.CTkFont(size=15), command=self.otworz_instrukcje,fg_color="#2b7a4b", hover_color="#1e5c36")
+        self.btn_instrukcja.pack(pady=10)
 
         self.btn_wyswietl_wykres = ctk.CTkButton(self, text="Wyświetl Ostatni Wykres", width=250, height=45,font=ctk.CTkFont(size=15), command=self.otworz_ostatni_wykres)
-        self.btn_wyswietl_wykres.pack(pady=15)
+        self.btn_wyswietl_wykres.pack(pady=10)
 
         self.btn_wejdz_w_baze = ctk.CTkButton(self, text="Wejdź w Bazę Danych", width=250, height=45,font=ctk.CTkFont(size=15), command=self.otworz_baze)
-        self.btn_wejdz_w_baze.pack(pady=15)
+        self.btn_wejdz_w_baze.pack(pady=10)
 
     def otworz_trening(self):
         self.withdraw()
@@ -39,6 +44,73 @@ class MenuApp(ctk.CTk):
             self.deiconify()
 
         trening.protocol("WM_DELETE_WINDOW", on_close)
+
+    def otworz_instrukcje(self):
+        okno = ctk.CTkToplevel(self)
+        okno.title("Instrukcja Poprawnego Wykonywania Ćwiczenia")
+        okno.geometry("900x500")
+
+        # Lewy panel: Wideo
+        video_frame = ctk.CTkFrame(okno)
+        video_frame.pack(side="left", padx=20, pady=20, fill="both", expand=True)
+
+        lbl_video_title = ctk.CTkLabel(video_frame, text="Podgląd Poprawnej Techniki", font=ctk.CTkFont(weight="bold"))
+        lbl_video_title.pack(pady=5)
+
+        video_label = ctk.CTkLabel(video_frame, text="Ładowanie wideo...")
+        video_label.pack(expand=True)
+
+        text_frame = ctk.CTkFrame(okno, width=350)
+        text_frame.pack(side="right", padx=20, pady=20, fill="y")
+
+        lbl_title = ctk.CTkLabel(text_frame, text="Krok po Kroku", font=ctk.CTkFont(size=20, weight="bold"))
+        lbl_title.pack(pady=10)
+
+        instrukcja_tekst = (
+            "1. POZYCJA WYJŚCIOWA:\n"
+            "Stań w lekkim rozkroku, stopy na szerokość barków. Złap sztangę nachwytem, nieco szerzej niż szerokość barków.\n\n"
+            "2. OPAD TUŁOWIA:\n"
+            "Ugnij lekko kolana i pochyl tułów do przodu (utrzymuj plecy proste, kąt nachylenia to około 70-90 stopni).\n\n"
+            "3. FAZA KONCENTRYCZNA (Ciągnięcie):\n"
+            "Przyciągnij sztangę do dolnej części klatki piersiowej lub górnej części brzucha. Prowadź łokcie blisko tułowia.\n\n"
+            "4. ŚCIĄGNIĘCIE ŁOPATEK:\n"
+            "W szczytowym momencie ruchu mocno zepnij mięśnie grzbietu i ściągnij łopatki do siebie.\n\n"
+            "5. FAZA EKSCENTRYCZNA (Opuszczanie):\n"
+            "Opuść sztangę w kontrolowany sposób, powracając do pełnego wyprostu ramion."
+        )
+
+        txt_info = ctk.CTkTextbox(text_frame, wrap="word", width=320, height=350, font=ctk.CTkFont(size=13))
+        txt_info.pack(pady=10, padx=10)
+        txt_info.insert("0.0", instrukcja_tekst)
+        txt_info.configure(state="disabled")
+
+        nazwa_pliku_wideo = "wioslowanie_sztanaga_trzymana_nachwytem_do_klatki_w_opadzie_tulowia.mp4"
+        cap = cv2.VideoCapture(nazwa_pliku_wideo)
+
+        def graj_wideo():
+            if not okno.winfo_exists():
+                cap.release()
+                return
+
+            if cap.isOpened():
+                ret, frame = cap.read()
+
+                if not ret:
+                    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                    ret, frame = cap.read()
+
+                if ret:
+                    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    img = Image.fromarray(cv2.resize(frame_rgb, (480, 360)))
+                    ctk_img = ctk.CTkImage(light_image=img, dark_image=img, size=(480, 360))
+                    video_label.configure(image=ctk_img, text="")
+                    video_label.image = ctk_img
+                else:
+                    video_label.configure(text="Nie znaleziono pliku wideo w folderze.")
+
+            okno.after(33, graj_wideo)
+
+        graj_wideo()
 
     def otworz_ostatni_wykres(self):
         conn = sqlite3.connect(self.db.db_name)
