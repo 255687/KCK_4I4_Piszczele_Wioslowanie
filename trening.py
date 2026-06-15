@@ -22,9 +22,9 @@ ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
 
 
-class TreningApp(ctk.CTk):
-    def __init__(self):
-        super().__init__()
+class TreningApp(ctk.CTkToplevel):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.title("Asystent Treningu - Wiosłowanie Sztangą (PRO - 2 Kamery)")
         self.geometry("1400x700")
 
@@ -328,8 +328,3 @@ class TreningApp(ctk.CTk):
         canvas = FigureCanvasTkAgg(fig, master=okno)
         canvas.draw()
         canvas.get_tk_widget().pack(fill="both", expand=True)
-
-
-if __name__ == "__main__":
-    app = TreningApp()
-    app.mainloop()
