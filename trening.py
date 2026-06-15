@@ -25,7 +25,7 @@ ctk.set_default_color_theme("blue")
 class TreningApp(ctk.CTkToplevel):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.title("Asystent Treningu - Wiosłowanie Sztangą (PRO - 2 Kamery)")
+        self.title("Asystent Treningu - Wiosłowanie Sztangą")
         self.geometry("1400x700")
 
         self.db = Database()
@@ -60,14 +60,14 @@ class TreningApp(ctk.CTkToplevel):
 
         self.frame_bok = ctk.CTkFrame(self.video_container)
         self.frame_bok.pack(side="left", padx=10, fill="both", expand=True)
-        self.lbl_tytul_bok = ctk.CTkLabel(self.frame_bok, text="Kamera: Profil (Laptop)",font=ctk.CTkFont(weight="bold"))
+        self.lbl_tytul_bok = ctk.CTkLabel(self.frame_bok, text="Kamera: Profil",font=ctk.CTkFont(weight="bold"))
         self.lbl_tytul_bok.pack(pady=5)
         self.video_label_bok = ctk.CTkLabel(self.frame_bok, text="")
         self.video_label_bok.pack(expand=True)
 
         self.frame_tyl = ctk.CTkFrame(self.video_container)
         self.frame_tyl.pack(side="left", padx=10, fill="both", expand=True)
-        self.lbl_tytul_tyl = ctk.CTkLabel(self.frame_tyl, text="Kamera: Tył (iPhone)", font=ctk.CTkFont(weight="bold"))
+        self.lbl_tytul_tyl = ctk.CTkLabel(self.frame_tyl, text="Kamera: Tył", font=ctk.CTkFont(weight="bold"))
         self.lbl_tytul_tyl.pack(pady=5)
         self.video_label_tyl = ctk.CTkLabel(self.frame_tyl, text="")
         self.video_label_tyl.pack(expand=True)
@@ -230,16 +230,11 @@ class TreningApp(ctk.CTkToplevel):
                     self.lbl_feedback_bok.configure(text=f"Podnieś lewą rękę (Start Serii {self.numer_serii})", text_color="yellow")
             return
 
-        ramie = [landmarks[self.mp_pose.PoseLandmark.LEFT_SHOULDER.value].x,
-                 landmarks[self.mp_pose.PoseLandmark.LEFT_SHOULDER.value].y]
-        biodro = [landmarks[self.mp_pose.PoseLandmark.LEFT_HIP.value].x,
-                  landmarks[self.mp_pose.PoseLandmark.LEFT_HIP.value].y]
-        kolano = [landmarks[self.mp_pose.PoseLandmark.LEFT_KNEE.value].x,
-                  landmarks[self.mp_pose.PoseLandmark.LEFT_KNEE.value].y]
-        lokiec = [landmarks[self.mp_pose.PoseLandmark.LEFT_ELBOW.value].x,
-                  landmarks[self.mp_pose.PoseLandmark.LEFT_ELBOW.value].y]
-        nadgarstek = [landmarks[self.mp_pose.PoseLandmark.LEFT_WRIST.value].x,
-                      landmarks[self.mp_pose.PoseLandmark.LEFT_WRIST.value].y]
+        ramie = [landmarks[self.mp_pose.PoseLandmark.LEFT_SHOULDER.value].x,landmarks[self.mp_pose.PoseLandmark.LEFT_SHOULDER.value].y]
+        biodro = [landmarks[self.mp_pose.PoseLandmark.LEFT_HIP.value].x,landmarks[self.mp_pose.PoseLandmark.LEFT_HIP.value].y]
+        kolano = [landmarks[self.mp_pose.PoseLandmark.LEFT_KNEE.value].x,landmarks[self.mp_pose.PoseLandmark.LEFT_KNEE.value].y]
+        lokiec = [landmarks[self.mp_pose.PoseLandmark.LEFT_ELBOW.value].x,landmarks[self.mp_pose.PoseLandmark.LEFT_ELBOW.value].y]
+        nadgarstek = [landmarks[self.mp_pose.PoseLandmark.LEFT_WRIST.value].x,landmarks[self.mp_pose.PoseLandmark.LEFT_WRIST.value].y]
 
         kat_plecow = oblicz_kat(ramie, biodro, kolano)
         kat_lokcia = oblicz_kat(ramie, lokiec, nadgarstek)
