@@ -84,7 +84,7 @@ class MenuApp(ctk.CTk):
         txt_info.insert("0.0", instrukcja_tekst)
         txt_info.configure(state="disabled")
 
-        nazwa_pliku_wideo = "wioslowanie_sztanaga_trzymana_nachwytem_do_klatki_w_opadzie_tulowia.mp4"
+        nazwa_pliku_wideo = "male-barbell-bent-over-row-side.mp4"
         cap = cv2.VideoCapture(nazwa_pliku_wideo)
 
         def graj_wideo():

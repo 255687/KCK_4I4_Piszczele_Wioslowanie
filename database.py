@@ -37,8 +37,7 @@ class Database:
     def zapisz_serie(self, trening_id, numer_serii, poprawne, bledne):
         conn = sqlite3.connect(self.db_name)
         c = conn.cursor()
-        c.execute("INSERT INTO serie (trening_id, numer_serii, poprawne, bledne) VALUES (?, ?, ?, ?)",
-                  (trening_id, numer_serii, poprawne, bledne))
+        c.execute("INSERT INTO serie (trening_id, numer_serii, poprawne, bledne) VALUES (?, ?, ?, ?)",(trening_id, numer_serii, poprawne, bledne))
         conn.commit()
         conn.close()
 
