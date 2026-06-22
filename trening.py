@@ -249,13 +249,13 @@ class TreningApp(ctk.CTkToplevel):
             if self.cooldown_komunikatu == 0:
                 self.voice.powiedz("Popraw plecy!")
                 self.bledne_powt += 1
-                self.cooldown_komunikatu = 100
+                self.cooldown_komunikatu = 250
 
         if self.postawa_zatwierdzona:
-            if kat_lokcia < 95:
+            if kat_lokcia < 120:
                 if self.faza_ruchu == "dol":
                     self.faza_ruchu = "gora"
-            elif kat_lokcia > 140:
+            elif kat_lokcia > 130:
                 if self.faza_ruchu == "gora":
                     self.licznik_powtorzen += 1
                     self.poprawne_powt += 1
@@ -288,7 +288,7 @@ class TreningApp(ctk.CTkToplevel):
                         self.voice.powiedz("Nierówne łokcie, ciągnij symetrycznie.")
 
                     self.bledne_powt += 1
-                    self.cooldown_komunikatu = 100
+                    self.cooldown_komunikatu = 250
             else:
                 self.lbl_feedback_tyl.configure(text="Symetria: OK", text_color="green")
         else:

@@ -1,6 +1,8 @@
-import pyttsx3
 import threading
 import queue
+import pythoncom
+import win32com.client
+
 
 class VoiceAssistant:
     def __init__(self):
@@ -9,13 +11,15 @@ class VoiceAssistant:
         self.tts_thread.start()
 
     def _tts_worker(self):
-        engine = pyttsx3.init()
-        engine.setProperty('rate', 150)
+        pythoncom.CoInitialize()
+        speaker = win32com.client.Dispatch("SAPI.SpVoice")
+
         while True:
             text = self.audio_queue.get()
-            if text is None: break
-            engine.say(text)
-            engine.runAndWait()
+            if text is None:
+                break
+
+            speaker.Speak(text)
             self.audio_queue.task_done()
 
     def powiedz(self, tekst):
